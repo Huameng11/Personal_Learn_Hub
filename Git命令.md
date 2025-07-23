@@ -157,6 +157,10 @@ Git 是一款强大的分布式版本控制系统，简单来说，它可以帮�
 3.  **`git push -u origin <本地分支名>`**: **推送本地提交到远程仓库**
     * **作用：** 将本地仓库的提交推送到 GitHub 远程仓库。`-u` 参数会将本地分支与远程分支关联起来，以后推送可以直接用 `git push`。
     * **用法：** (假设你想推送本地的 `main` 分支)
+        先创建main分支
+        ```bash
+         git branch -M main 
+        ```
         ```bash
         git push -u origin main
         ```
