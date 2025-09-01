@@ -183,7 +183,35 @@ Git 是一款强大的分布式版本控制系统，简单来说，它可以帮�
 
 ---
 
-## 四、总结与后续学习
+## 四、多项目整理
+
+1. **删除外层仓库的.git（保留代码）**
+
+```bash
+rm -rf .git
+```
+
+
+
+2. **重新初始化并添加子模块**
+
+```bash
+	git init
+	git submodule add <仓库A的GitURL>
+	git submodule add <仓库B的GitURL>
+```
+
+
+
+3. **提交变更**
+
+```bash
+git commit -m "添加子模块"
+```
+
+
+
+## 五、总结与后续学习
 
 这只是 Git 和 GitHub 的入门基础。Git 非常强大，还有很多高级功能如变基 (`rebase`)、标签 (`tag`)、储藏 (`stash`) 等待你去探索。
 
