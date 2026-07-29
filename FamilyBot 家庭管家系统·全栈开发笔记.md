@@ -782,13 +782,20 @@ self.addEventListener('fetch', event => {
 
 将你本地电脑上的整个 `familyBot` 文件夹（包含 `static/`、`routers/` 目录以及 `main.py`、`config.py`、`database.py`、`.env` 文件）通过 SCP 命令行或 VS Code SSH 拖拽方式，传输至树莓派的 `/home/pi/familyBot/` 目录下。
 
-### 步骤 2：安装运行依赖库
+### 步骤 2：安装运行依赖库(虚拟环境)
 
 使用 SSH 连接上树莓派，进入对应项目文件夹，执行以下命令安装运行环境：
 
-
+创建虚拟环境，并安装所需包
 
 ```Bash
+python3 -m venv .venv
+source .venv/bin/activate #激活虚拟环境
+pip install python-multipart fastapi uvicorn openai python-dotenv #安装包
+```
+
+```Bash
+#下面这种办法强行将所需包安装至系统内部
 cd /home/pi/familyBot/
 pip3 install fastapi uvicorn python-dotenv openai --break-system-packages 2>/dev/null || pip3 install fastapi uvicorn python-dotenv openai
 ```
@@ -805,7 +812,7 @@ sudo nano /etc/systemd/system/familybot.service
 
 将以下配置内容写入其中：
 
-
+*使用虚拟环境.venv中python运行脚本*
 
 ```Plaintext
 [Unit]
@@ -815,7 +822,8 @@ After=network.target
 [Service]
 User=pi
 WorkingDirectory=/home/pi/familyBot
-ExecStart=/home/pi/.local/bin/uvicorn main:app --host 0.0.0.0 --port 8000
+
+ExecStart=/home/pi/familyBot/.venv/bin/uvicorn main:app --host 0.0.0.0 --port 8000
 Restart=always
 RestartSec=5
 Environment=PYTHONUNBUFFERED=1
@@ -848,7 +856,253 @@ sudo systemctl start familybot
 - **检查服务是否成功开机自启**：输入 `systemctl is-enabled familybot`，若输出 `enabled` 则代表成功。
 - **查看服务当前运行日志与状态**：输入 `sudo systemctl status familybot`，若看到绿色的 `active (running)` 字样，说明大管家已经在树莓派后台完美起飞！
 
-## 五、后续升级提问AI模板
+## 五、前端代码重构
+
+采用**原生 ES Modules** 的方式把 `index.html` 拆解开。
+
+### 📂 拆分后的前端目录结构
+
+拆分后，`static/` 文件夹会变得非常规整清晰：
+
+
+
+```Plaintext
+static/
+│  index.html            # 极简的主页面壳子（只剩头部、底部 Tab 导航和组件挂载点）
+│
+├─css/
+│      style.css         # 抽离出来的全局与卡片 CSS 样式
+│
+└─components/            # 拆分出来的子组件（每个模块对应一个文件）
+        ChatTab.js       # 1. 管家问答组件
+        MedicineTab.js   # 2. 智能药箱组件（含搜索过滤逻辑）
+        StorageTab.js    # 3. 家庭仓库组件（含搜索过滤逻辑）
+        MemoTab.js       # 4. 家庭备忘录组件（含搜索过滤逻辑）
+```
+
+### 🛠️ 拆分步骤与源码
+
+#### 1. 新建 `static/css/style.css`
+
+把所有 CSS 样式抽离到独立文件：
+
+
+
+```CSS
+* { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+html, body { height: 100%; margin: 0; overflow: hidden; background: #f5f6f9; }
+#app { display: flex; flex-direction: column; height: 100%; }
+
+header { background: #3F51B5; color: white; padding: 14px; text-align: center; font-size: 18px; font-weight: bold; flex-shrink: 0; z-index: 10; }
+.content-section { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+
+/* 聊天 */
+#chat-box { padding: 15px; display: flex; flex-direction: column; gap: 12px; padding-bottom: 80px; }
+.msg { max-width: 80%; padding: 12px 16px; border-radius: 12px; font-size: 15px; line-height: 1.5; word-wrap: break-word; }
+.bot { background: white; align-self: flex-start; color: #333; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border-bottom-left-radius: 2px; }
+.user { background: #3F51B5; color: white; align-self: flex-end; border-bottom-right-radius: 2px; }
+
+.input-area { background: white; padding: 10px; display: flex; gap: 8px; border-top: 1px solid #eee; position: fixed; bottom: 56px; left:0; right:0; z-index: 10; }
+input[type="text"] { border: 1px solid #ddd; border-radius: 8px; padding: 10px; font-size: 14px; outline: none; width: 100%; background: #fafafa; }
+input[type="text"]:focus { border-color: #3F51B5; background: #fff; }
+.chat-input { border-radius: 20px !important; }
+
+.btn { background: #3F51B5; color: white; border: none; border-radius: 8px; padding: 8px 14px; font-size: 14px; cursor: pointer; font-weight: bold; }
+.voice-btn { background: #ff9800; border-radius: 50%; width: 42px; height: 42px; padding: 0; display: flex; align-items: center; justify-content: center; border:none; color:white; flex-shrink: 0; }
+.loading { align-self: flex-start; color: #888; font-size: 13px; margin-left: 5px; }
+
+/* 表单卡片 */
+.manager-padding { padding: 15px 15px 80px 15px; } 
+.card { background: white; padding: 16px; border-radius: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.05); margin-bottom: 15px; }
+.card h3 { margin-top: 0; margin-bottom: 15px; font-size: 16px; color: #333; border-bottom: 1px solid #eee; padding-bottom: 8px; }
+.form-group { margin-bottom: 12px; display: flex; flex-direction: column; gap: 6px; }
+.form-group label { font-size: 13px; color: #666; font-weight: bold; }
+.form-control { border: 1px solid #ddd; border-radius: 8px; padding: 10px 12px; font-size: 14px; outline: none; width: 100%; background: #fafafa; }
+.form-control:focus { border-color: #3F51B5; background: #fff; }
+
+.search-input { border: 2px solid #3F51B5; background: #fff; font-size: 14px; font-weight: 500; }
+.item-card { background: white; border-radius: 12px; padding: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); display: flex; flex-direction: column; gap: 10px; margin-bottom: 15px; }
+.med-border { border-left: 5px solid #4CAF50; }
+.storage-border { border-left: 5px solid #FF9800; }
+.memo-border { border-left: 5px solid #9C27B0; }
+.item-card-header { display: flex; justify-content: space-between; align-items: center; gap: 10px; border-bottom: 1px dashed #eee; padding-bottom: 8px; }
+.item-title-input { font-weight: bold; font-size: 16px; border: none; background: none; flex: 1; outline: none; padding: 4px 0; color: #222; }
+.action-btns { display: flex; gap: 6px; }
+
+textarea { border: 1px solid #ddd; border-radius: 8px; padding: 10px; font-size: 14px; outline: none; resize: vertical; background: #fafafa; width: 100%; }
+
+/* 底部 Tab */
+.nav-bar { position: fixed; bottom: 0; left: 0; right: 0; height: 56px; background: white; border-top: 1px solid #e0e0e0; display: flex; justify-content: space-around; align-items: center; z-index: 100; }
+.nav-item { background: none; border: none; flex: 1; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; color: #757575; font-size: 11px; cursor: pointer; }
+.nav-item.active { color: #3F51B5; font-weight: bold; }
+.nav-icon { font-size: 18px; }
+```
+
+#### 2. 新建子组件（以 `MedicineTab.js` 为例，其他组件同理）
+
+在 `static/components/` 文件夹下新建 `MedicineTab.js`：
+
+
+
+```JavaScript
+export default {
+  name: 'MedicineTab',
+  template: `
+    <div class="content-section manager-padding">
+      <div class="card">
+        <h3>➕ 录入新药品</h3>
+        <div class="form-group"><label>药品名称 *</label><input type="text" v-model="newMed.name" class="form-control" placeholder="如：布洛芬"></div>
+        <div class="form-group"><label>数量 / 规格</label><input type="text" v-model="newMed.count" class="form-control"></div>
+        <div class="form-group"><label>存放位置</label><input type="text" v-model="newMed.location" class="form-control"></div>
+        <div class="form-group"><label>有效期</label><input type="text" v-model="newMed.expire_date" class="form-control"></div>
+        <div class="form-group"><label>用法用量</label><input type="text" v-model="newMed.usage" class="form-control"></div>
+        <button class="btn" style="width:100%; background:#4CAF50;" @click="addMedicine">保存到药箱</button>
+      </div>
+      <div class="card">
+        <h3>📋 药箱库存 (显示: {{ filteredMedList.length }} / 共: {{ medList.length }})</h3>
+        <div style="margin-bottom: 15px;">
+          <input type="text" v-model="searchKey" class="form-control search-input" placeholder="🔍 快速搜索药品名称、位置、用途...">
+        </div>
+        <div v-if="filteredMedList.length === 0" style="text-align:center;color:#999;font-size:13px;padding:15px 0;">
+          {{ searchKey ? '未找到符合条件的药品' : '暂无数据' }}
+        </div>
+        <div v-for="med in filteredMedList" :key="med.id" class="item-card med-border">
+          <div class="item-card-header">
+            <input type="text" v-model="med.name" class="item-title-input">
+            <div class="action-btns">
+              <button class="btn" style="background:#f44336;padding:6px 12px;font-size:13px;" @click="deleteMedicine(med.id)">删除</button>
+              <button class="btn" style="background:#2196F3;padding:6px 12px;font-size:13px;" @click="updateMedicine(med)">保存</button>
+            </div>
+          </div>
+          <div class="form-group"><label>数量/规格</label><input type="text" v-model="med.count" class="form-control"></div>
+          <div class="form-group"><label>存放位置</label><input type="text" v-model="med.location" class="form-control"></div>
+          <div class="form-group"><label>有效期</label><input type="text" v-model="med.expire_date" class="form-control"></div>
+          <div class="form-group"><label>用法用量</label><input type="text" v-model="med.usage" class="form-control"></div>
+        </div>
+      </div>
+    </div>
+  `,
+  data() {
+    return {
+      searchKey: '',
+      medList: [],
+      newMed: { name: '', count: '', location: '', expire_date: '', usage: '' }
+    }
+  },
+  computed: {
+    filteredMedList() {
+      if (!this.searchKey.trim()) return this.medList;
+      const key = this.searchKey.toLowerCase();
+      return this.medList.filter(item => 
+        (item.name && item.name.toLowerCase().includes(key)) ||
+        (item.location && item.location.toLowerCase().includes(key)) ||
+        (item.usage && item.usage.toLowerCase().includes(key)) ||
+        (item.expire_date && item.expire_date.toLowerCase().includes(key))
+      );
+    }
+  },
+  methods: {
+    async fetchList() {
+      const res = await fetch('/api/medicines');
+      const data = await res.json();
+      if (data.status === 'success') this.medList = data.data;
+    },
+    async addMedicine() {
+      if (!this.newMed.name) return alert('请输入名称');
+      const params = new URLSearchParams(this.newMed).toString();
+      await fetch(`/api/add_medicine?${params}`, { method: 'POST' });
+      alert('录入成功');
+      this.newMed = { name: '', count: '', location: '', expire_date: '', usage: '' };
+      this.fetchList();
+    },
+    async updateMedicine(med) {
+      const params = new URLSearchParams(med).toString();
+      await fetch(`/api/update_medicine?${params}`, { method: 'POST' });
+      alert('修改成功');
+      this.fetchList();
+    },
+    async deleteMedicine(id) {
+      if (confirm('确定要删除这条记录吗？')) {
+        await fetch(`/api/delete_medicine?id=${id}`, { method: 'POST' });
+        this.fetchList();
+      }
+    }
+  },
+  mounted() {
+    this.fetchList();
+  }
+}
+```
+
+#### 3. 极简的入口 `static/index.html`（只剩约 60 行！）
+
+拆分后，主文件引入 ES 模块脚本 (`type="module"`)，代码变得极其干净清爽：
+
+
+
+```HTML
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>FamilyBot 家庭管家</title>
+  <link rel="stylesheet" href="./css/style.css">
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+</head>
+<body>
+<div id="app">
+  <header>{{ headerTitle }}</header>
+
+  <chat-tab v-show="currentTab === 'home'"></chat-tab>
+  <medicine-tab v-show="currentTab === 'medicine'"></medicine-tab>
+  <storage-tab v-show="currentTab === 'storage'"></storage-tab>
+  <memo-tab v-show="currentTab === 'memo'"></memo-tab>
+
+  <nav class="nav-bar">
+    <button :class="['nav-item', {active: currentTab==='home'}]" @click="switchTab('home', '🏠 FamilyBot 家庭管家')">
+      <span class="nav-icon">🏠</span><span>管家问答</span>
+    </button>
+    <button :class="['nav-item', {active: currentTab==='medicine'}]" @click="switchTab('medicine', '💊 智能药箱')">
+      <span class="nav-icon">💊</span><span>智能药箱</span>
+    </button>
+    <button :class="['nav-item', {active: currentTab==='storage'}]" @click="switchTab('storage', '📦 家庭仓库')">
+      <span class="nav-icon">📦</span><span>家庭仓库</span>
+    </button>
+    <button :class="['nav-item', {active: currentTab==='memo'}]" @click="switchTab('memo', '📝 家庭备忘录')">
+      <span class="nav-icon">📝</span><span>家庭备忘</span>
+    </button>
+  </nav>
+</div>
+
+<script type="module">
+  import ChatTab from './components/ChatTab.js';
+  import MedicineTab from './components/MedicineTab.js';
+  import StorageTab from './components/StorageTab.js';
+  import MemoTab from './components/MemoTab.js';
+
+  const { createApp } = Vue;
+  createApp({
+    components: { ChatTab, MedicineTab, StorageTab, MemoTab },
+    data() {
+      return {
+        headerTitle: '🏠 FamilyBot 家庭管家',
+        currentTab: 'home'
+      }
+    },
+    methods: {
+      switchTab(tab, title) {
+        this.currentTab = tab;
+        this.headerTitle = title;
+      }
+    }
+  }).mount('#app');
+</script>
+</body>
+</html>
+```
+
+## 六、后续升级提问AI模板
 
 **提问模板：** “AI，我想为我的本地项目 **FamilyBot** 增加一个新模块：**[在这里写你的新模块名字，例如：本地密码管理器]**。
 
