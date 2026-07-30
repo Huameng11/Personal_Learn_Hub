@@ -1109,7 +1109,7 @@ export default {
 以下是该项目的**核心架构蓝图与目录规范**：
 
 ```
-# FamilyBot 项目上下文蓝图
+分析这个项目，并在上下文中记录该项目的整体结构，目录结构以及所有源码，同时需要知道# FamilyBot 项目上下文蓝图
 
 ## 1. 系统愿景与定位
 FamilyBot 是一个部署在树莓派/本地的 24 小时全能家庭管家大中台。
@@ -1119,25 +1119,25 @@ FamilyBot 是一个部署在树莓派/本地的 24 小时全能家庭管家大�
 - 后端：FastAPI + SQLite3 + AsyncOpenAI (GLM-4-flash)。
 - 前端：单文件 Vue 3 (CDN 引入) + HTML5 PWA (Service Worker 相对路径拦截)。
 - 架构原则：
-  1. 后端必须使用 `APIRouter` 实现物理隔离与解耦，每个模块在 `routers/` 下独立为一个文件。
-  2. 前端采用 Local-First（本地优先）架构，使用 LocalStorage 作为数据快照和离线写操作队列，具备毫秒级超时断网检测，支持回家 WiFi 自动心跳同步。
-  3. 前端 UI 采用完全竖排的移动端防御布局，防止多列输入撑爆卡片。
+  1. 后端必须使用 `APIRouter` 实现物理隔离与解耦，每个模块在 `routers/` 下独立为一个文件。
+  2. 前端采用 Local-First（本地优先）架构，使用 LocalStorage 作为数据快照和离线写操作队列，具备毫秒级超时断网检测，支持回家 WiFi 自动心跳同步。
+  3. 前端 UI 采用完全竖排的移动端防御布局，防止多列输入撑爆卡片。
 
 ## 3. 规范文件目录树
 familyBot/
-├── .env                # 存放 FAMILYBOT_API_KEY 等
-├── config.py           # 配置读取
-├── database.py         # SQLite 统一建表与公共查询 (包含 init_db)
-├── main.py             # 极简主入口，负责 app.include_router
-├── routers/            # 路由层
-│   ├── chat.py         # AI 核心问答（读取全库拼装 Prompt）
-│   ├── medicine.py     # 智能药箱 CRUD (带 delete_medicine)
-│   ├── storage.py      # 家庭仓库 CRUD (带 delete_storage)
-│   └── memo.py         # 家庭备忘录 CRUD (带 delete_memo)
-└── static/             # 静态前端
-    ├── index.html      # Vue3 单页面交互与离线乐观队列
-    ├── manifest.json   # PWA 配置文件
-    └── sw.js           # SW 相对路径离线秒开缓存
+├── .env                # 存放 FAMILYBOT_API_KEY 等
+├── config.py           # 配置读取
+├── database.py         # SQLite 统一建表与公共查询 (包含 init_db)
+├── main.py             # 极简主入口，负责 app.include_router
+├── routers/            # 路由层
+│   ├── chat.py         # AI 核心问答（读取全库拼装 Prompt）
+│   ├── medicine.py     # 智能药箱 CRUD (带 delete_medicine)
+│   ├── storage.py      # 家庭仓库 CRUD (带 delete_storage)
+│   └── memo.py         # 家庭备忘录 CRUD (带 delete_memo)
+└── static/             # 静态前端
+    ├── index.html      # Vue3 单页面交互与离线乐观队列
+    ├── manifest.json   # PWA 配置文件
+    └── sw.js           # SW 相对路径离线秒开缓存。 把这些内容都记录到上下文，接下来我会继续开发这个项目，新增或修改功能，你要能够整体判断。另外项目内是有.env环境文件和.db的，只不过我没有上传
 ```
 
 以下是目前 **`database.py` 中已有的表结构**：
